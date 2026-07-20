@@ -11,7 +11,7 @@ const accents = [
   { id: 'coral', name: 'Coral', color: 'oklch(.61 .18 28)' },
   { id: 'sun', name: 'Sun', color: 'oklch(.68 .15 78)' }
 ] as const;
-const emptyData: KunbanData = { cards: [], settings: { apiPort: 7481, theme: 'system', expandedOnHover: true, accent: 'system' } };
+const emptyData: KunbanData = { cards: [], settings: { apiPort: 7400, theme: 'system', expandedOnHover: true, accent: 'system' } };
 
 const formatDue = (due?: string) => {
   if (!due) return null;

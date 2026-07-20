@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
-const port = Number(process.env.KUNBAN_PORT ?? 7481);
+const port = Number(process.env.KUNBAN_PORT ?? 7400);
 const baseUrl = `http://127.0.0.1:${port}/api/local`;
 
 async function local(path: string, options: RequestInit = {}) {

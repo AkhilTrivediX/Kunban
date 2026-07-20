@@ -33,7 +33,7 @@ The installer and portable executable are written to `release/`.
 
 ## The local integration model
 
-Kunban starts a loopback-only API at `http://127.0.0.1:7481`. The port can be changed later in settings. It intentionally has two trust levels:
+Kunban starts a loopback-only API at `http://127.0.0.1:7400`. The memorable default can be overridden with `KUNBAN_PORT`. It intentionally has two trust levels:
 
 | Surface | Access | Purpose |
 | --- | --- | --- |
@@ -49,7 +49,7 @@ The API is bound to `127.0.0.1` — it is never exposed to a LAN. Browser reques
 This is deliberately the only route that a website can call. It does not reveal any board data.
 
 ```js
-await fetch('http://127.0.0.1:7481/api/web/cards', {
+await fetch('http://127.0.0.1:7400/api/web/cards', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -76,7 +76,7 @@ Register the following command with an MCP-compatible AI client:
     "kunban": {
       "command": "npx",
       "args": ["tsx", "C:/path/to/Kunban/src/mcp/server.ts"],
-      "env": { "KUNBAN_PORT": "7481" }
+      "env": { "KUNBAN_PORT": "7400" }
     }
   }
 }

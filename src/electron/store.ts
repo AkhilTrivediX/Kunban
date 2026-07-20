@@ -3,6 +3,8 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { Card, KunbanData } from '../shared/types';
 
+const defaultApiPort = 7400;
+
 const seedCards: Card[] = [
   { id: 'seed-1', title: 'Review the design brief', details: 'Set the visual direction before the first build.', priority: 'critical', stack: 'priority', dueAt: new Date(Date.now() + 3 * 3_600_000).toISOString(), source: 'manual', createdAt: new Date().toISOString() },
   { id: 'seed-2', title: 'Plan next week’s focus', priority: 'high', stack: 'priority', source: 'manual', createdAt: new Date().toISOString() },
@@ -12,7 +14,7 @@ const seedCards: Card[] = [
 
 export const makeData = (): KunbanData => ({
   cards: seedCards,
-  settings: { apiPort: 7481, theme: 'system', expandedOnHover: true, accent: 'system' }
+  settings: { apiPort: defaultApiPort, theme: 'system', expandedOnHover: true, accent: 'system' }
 });
 
 export class Store {
@@ -24,6 +26,10 @@ export class Store {
     try {
       const saved = JSON.parse(await readFile(this.file, 'utf8')) as Partial<KunbanData>;
       this.data = { ...makeData(), ...saved, settings: { ...makeData().settings, ...saved.settings } };
+      if (saved.settings?.apiPort === 7481) {
+        this.data.settings.apiPort = defaultApiPort;
+        await this.save();
+      }
     } catch {
       await this.save();
     }
