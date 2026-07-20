@@ -26,6 +26,7 @@ export default function App() {
   const [expanded, setExpanded] = useState(false);
   const [resizing, setResizing] = useState(false);
   const [systemAccent, setSystemAccent] = useState('#0078d4');
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
   const [settings, setSettings] = useState(false);
   const [composer, setComposer] = useState(false);
   const [draggedCard, setDraggedCard] = useState<string | null>(null);
@@ -33,6 +34,12 @@ export default function App() {
   const hoverTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => { void window.kunban.load().then(setData); void window.kunban.getSystemAccent().then(setSystemAccent); }, []);
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-color-scheme: dark)');
+    const syncTheme = () => setSystemDark(query.matches);
+    query.addEventListener('change', syncTheme);
+    return () => query.removeEventListener('change', syncTheme);
+  }, []);
   useEffect(() => {
     const refresh = window.setInterval(() => { void window.kunban.load().then(setData); }, 10_000);
     return () => window.clearInterval(refresh);
@@ -61,7 +68,8 @@ export default function App() {
   };
 
   const widgetStyle = { '--system-accent': systemAccent } as CSSProperties;
-  return <main className={`widget accent-${data.settings.accent} ${expanded ? 'is-expanded' : ''} ${resizing ? 'is-resizing' : ''}`} style={widgetStyle} onMouseEnter={scheduleOpen} onMouseLeave={() => { cancelOpen(); close(); }}>
+  const effectiveTheme = data.settings.theme === 'system' ? (systemDark ? 'dark' : 'light') : data.settings.theme;
+  return <main className={`widget theme-${effectiveTheme} accent-${data.settings.accent} ${expanded ? 'is-expanded' : ''} ${resizing ? 'is-resizing' : ''}`} style={widgetStyle} onMouseEnter={scheduleOpen} onMouseLeave={() => { cancelOpen(); close(); }}>
     <header className="widget-header"><div className="brand drag"><Mark /><span>kunban</span><em>Today</em></div><div className="header-actions"><button className="icon-button no-drag" aria-label="Add a card" onClick={() => { open(); setComposer(true); }}><Plus /></button><button className="icon-button no-drag" aria-label="Settings" onClick={() => { open(); setSettings((value) => !value); }}><Gear /></button><button className="icon-button no-drag hide-button" aria-label="Hide Kunban" onClick={() => window.kunban.hide()}><Minus /></button></div></header>
     {!expanded ? <Compact cards={cards.filter((card) => card.stack === 'priority')} onOpen={open} onDone={toggleDone} /> : <Expanded cards={cards} onMove={move} onDone={toggleDone} draggedCard={draggedCard} dropTarget={dropTarget} onDragStart={setDraggedCard} onDragEnd={() => { setDraggedCard(null); setDropTarget(null); }} onDragTarget={setDropTarget} />}
     {composer && <Composer onClose={() => setComposer(false)} onCreate={create} />}
