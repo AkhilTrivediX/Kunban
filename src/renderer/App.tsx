@@ -29,6 +29,8 @@ export default function App() {
   const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
   const [settings, setSettings] = useState(false);
   const [composer, setComposer] = useState(false);
+  const [editingCard, setEditingCard] = useState<Card | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ card: Card; x: number; y: number } | null>(null);
   const [draggedCard, setDraggedCard] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<StackId | null>(null);
   const hoverTimer = useRef<number | undefined>(undefined);
@@ -53,7 +55,7 @@ export default function App() {
     void window.kunban.setExpanded(true).then(() => { setExpanded(true); setResizing(false); });
   };
   const close = () => {
-    if (settings || composer || !expanded || resizing) return;
+    if (settings || composer || editingCard || contextMenu || !expanded || resizing) return;
     setExpanded(false);
     setResizing(true);
     void window.kunban.setExpanded(false).then(() => setResizing(false));
@@ -62,40 +64,64 @@ export default function App() {
   const cancelOpen = () => window.clearTimeout(hoverTimer.current);
   const move = (id: string, stack: StackId) => update({ ...data, cards: data.cards.map((card) => card.id === id ? { ...card, stack } : card) });
   const toggleDone = (card: Card) => move(card.id, card.stack === 'finished' ? 'priority' : 'finished');
+  const remove = (id: string) => update({ ...data, cards: data.cards.filter((card) => card.id !== id) });
   const create = (input: Pick<Card, 'title' | 'priority' | 'details' | 'dueAt'>) => {
     update({ ...data, cards: [{ ...input, id: crypto.randomUUID(), stack: 'priority', source: 'manual', createdAt: new Date().toISOString() }, ...data.cards] });
     setComposer(false);
   };
+  const save = (input: Pick<Card, 'title' | 'priority' | 'details' | 'dueAt'>) => {
+    if (editingCard) {
+      update({ ...data, cards: data.cards.map((card) => card.id === editingCard.id ? { ...card, ...input } : card) });
+      setEditingCard(null);
+      return;
+    }
+    create(input);
+  };
+  const showContextMenu = (card: Card, x: number, y: number) => {
+    cancelOpen();
+    setContextMenu({ card, x: Math.max(8, Math.min(x, window.innerWidth - 210)), y: Math.max(8, Math.min(y, window.innerHeight - 194)) });
+  };
+  const editCard = (card: Card) => { setContextMenu(null); open(); setEditingCard(card); };
+  const contextMove = (card: Card, stack: StackId) => { move(card.id, stack); setContextMenu(null); };
+  const contextToggleDone = (card: Card) => { toggleDone(card); setContextMenu(null); };
+  const contextDelete = (card: Card) => { remove(card.id); setContextMenu(null); };
 
   const widgetStyle = { '--system-accent': systemAccent } as CSSProperties;
   const effectiveTheme = data.settings.theme === 'system' ? (systemDark ? 'dark' : 'light') : data.settings.theme;
-  return <main className={`widget theme-${effectiveTheme} accent-${data.settings.accent} ${expanded ? 'is-expanded' : ''} ${resizing ? 'is-resizing' : ''}`} style={widgetStyle} onMouseEnter={scheduleOpen} onMouseLeave={() => { cancelOpen(); close(); }}>
-    <header className="widget-header"><div className="brand drag"><Mark /><span>kunban</span><em>Today</em></div><div className="header-actions"><button className="icon-button no-drag" aria-label="Add a card" onClick={() => { open(); setComposer(true); }}><Plus /></button><button className="icon-button no-drag" aria-label="Settings" onClick={() => { open(); setSettings((value) => !value); }}><Gear /></button><button className="icon-button no-drag hide-button" aria-label="Hide Kunban" onClick={() => window.kunban.hide()}><Minus /></button></div></header>
-    {!expanded ? <Compact cards={cards.filter((card) => card.stack === 'priority')} onOpen={open} onDone={toggleDone} /> : <Expanded cards={cards} onMove={move} onDone={toggleDone} draggedCard={draggedCard} dropTarget={dropTarget} onDragStart={setDraggedCard} onDragEnd={() => { setDraggedCard(null); setDropTarget(null); }} onDragTarget={setDropTarget} />}
-    {composer && <Composer onClose={() => setComposer(false)} onCreate={create} />}
+  return <main className={`widget theme-${effectiveTheme} accent-${data.settings.accent} ${expanded ? 'is-expanded' : ''} ${resizing ? 'is-resizing' : ''}`} style={widgetStyle} onMouseEnter={scheduleOpen} onMouseLeave={() => { cancelOpen(); close(); }} onClick={() => setContextMenu(null)}>
+    <header className="widget-header"><div className="brand drag"><Mark /><span>kunban</span><em>Today</em></div><div className="header-actions"><button className="icon-button no-drag" aria-label="Add a card" onClick={() => { open(); setEditingCard(null); setComposer(true); }}><Plus /></button><button className="icon-button no-drag" aria-label="Settings" onClick={() => { open(); setSettings((value) => !value); }}><Gear /></button><button className="icon-button no-drag hide-button" aria-label="Hide Kunban" onClick={() => window.kunban.hide()}><Minus /></button></div></header>
+    {!expanded ? <Compact cards={cards.filter((card) => card.stack === 'priority')} onOpen={open} onDone={toggleDone} onContextMenu={showContextMenu} /> : <Expanded cards={cards} onMove={move} onDone={toggleDone} onContextMenu={showContextMenu} draggedCard={draggedCard} dropTarget={dropTarget} onDragStart={setDraggedCard} onDragEnd={() => { setDraggedCard(null); setDropTarget(null); }} onDragTarget={setDropTarget} />}
+    {(composer || editingCard) && <Composer key={editingCard?.id ?? 'new'} card={editingCard ?? undefined} onClose={() => { setComposer(false); setEditingCard(null); }} onSave={save} />}
     {settings && <Settings data={data} onChange={update} onClose={() => setSettings(false)} />}
+    {contextMenu && <ContextMenu {...contextMenu} onEdit={editCard} onMove={contextMove} onToggleDone={contextToggleDone} onDelete={contextDelete} />}
   </main>;
 }
 
-function Compact({ cards, onOpen, onDone }: { cards: Card[]; onOpen(): void; onDone(card: Card): void }) {
+function Compact({ cards, onOpen, onDone, onContextMenu }: { cards: Card[]; onOpen(): void; onDone(card: Card): void; onContextMenu(card: Card, x: number, y: number): void }) {
   const now = cards.slice(0, 4);
-  return <section className="compact-view" aria-label="Priority cards"><div className="view-intro"><div><p>Up next</p><h1>{cards.length ? `${cards.length} commitments` : 'A clear day'}</h1></div><button className="text-button no-drag" onClick={onOpen}>Open board <Arrow /></button></div><div className="priority-list">{now.length ? now.map((card, index) => <CardRow key={card.id} card={card} index={index} onDone={onDone} />) : <div className="empty"><span>✓</span><p>Nothing urgent. Add a card when the next thing becomes clear.</p></div>}</div>{cards.length > 4 && <button className="more-button no-drag" onClick={onOpen}>+{cards.length - 4} more priorities</button>}<footer><span className="pulse" />Hover to expand</footer></section>;
+  return <section className="compact-view" aria-label="Priority cards"><div className="view-intro"><div><p>Up next</p><h1>{cards.length ? `${cards.length} commitments` : 'A clear day'}</h1></div><button className="text-button no-drag" onClick={onOpen}>Open board <Arrow /></button></div><div className="priority-list">{now.length ? now.map((card, index) => <CardRow key={card.id} card={card} index={index} onDone={onDone} onContextMenu={onContextMenu} />) : <div className="empty"><span>✓</span><p>Nothing urgent. Add a card when the next thing becomes clear.</p></div>}</div>{cards.length > 4 && <button className="more-button no-drag" onClick={onOpen}>+{cards.length - 4} more priorities</button>}<footer><span className="pulse" />Hover to expand</footer></section>;
 }
 
-function Expanded({ cards, onMove, onDone, draggedCard, dropTarget, onDragStart, onDragEnd, onDragTarget }: { cards: Card[]; onMove(id: string, stack: StackId): void; onDone(card: Card): void; draggedCard: string | null; dropTarget: StackId | null; onDragStart(id: string): void; onDragEnd(): void; onDragTarget(stack: StackId | null): void }) {
+function Expanded({ cards, onMove, onDone, onContextMenu, draggedCard, dropTarget, onDragStart, onDragEnd, onDragTarget }: { cards: Card[]; onMove(id: string, stack: StackId): void; onDone(card: Card): void; onContextMenu(card: Card, x: number, y: number): void; draggedCard: string | null; dropTarget: StackId | null; onDragStart(id: string): void; onDragEnd(): void; onDragTarget(stack: StackId | null): void }) {
   const stackAtPointer = (event: React.PointerEvent<HTMLElement>) => document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-stack]')?.dataset.stack as StackId | undefined;
   const finishPointerDrag = (event: React.PointerEvent<HTMLElement>) => { const stack = stackAtPointer(event); if (draggedCard && stack) onMove(draggedCard, stack); onDragEnd(); };
-  return <section className="board" aria-label="Kunban board" onPointerMove={(event) => { if (draggedCard) onDragTarget(stackAtPointer(event) ?? null); }} onPointerUp={finishPointerDrag} onPointerCancel={onDragEnd}>{(Object.keys(stackMeta) as StackId[]).map((stack) => <section data-stack={stack} className={`stack ${dropTarget === stack ? 'is-drop-target' : ''}`} key={stack}><div className="stack-head"><div><p>{stackMeta[stack].hint}</p><h2>{stackMeta[stack].title}</h2></div><span>{cards.filter((card) => card.stack === stack).length}</span></div><div className="stack-cards">{cards.filter((card) => card.stack === stack).map((card, index) => <CardRow key={card.id} card={card} index={index} onDone={onDone} dragging={draggedCard === card.id} onDragStart={onDragStart} onDragEnd={onDragEnd} />)}{!cards.some((card) => card.stack === stack) && <div className="stack-empty">Drop a card here.</div>}</div></section>)}</section>;
+  return <section className="board" aria-label="Kunban board" onPointerMove={(event) => { if (draggedCard) onDragTarget(stackAtPointer(event) ?? null); }} onPointerUp={finishPointerDrag} onPointerCancel={onDragEnd}>{(Object.keys(stackMeta) as StackId[]).map((stack) => <section data-stack={stack} className={`stack ${dropTarget === stack ? 'is-drop-target' : ''}`} key={stack}><div className="stack-head"><div><p>{stackMeta[stack].hint}</p><h2>{stackMeta[stack].title}</h2></div><span>{cards.filter((card) => card.stack === stack).length}</span></div><div className="stack-cards">{cards.filter((card) => card.stack === stack).map((card, index) => <CardRow key={card.id} card={card} index={index} onDone={onDone} onContextMenu={onContextMenu} dragging={draggedCard === card.id} onDragStart={onDragStart} onDragEnd={onDragEnd} />)}{!cards.some((card) => card.stack === stack) && <div className="stack-empty">Drop a card here.</div>}</div></section>)}</section>;
 }
 
-function CardRow({ card, index, onDone, dragging, onDragStart, onDragEnd }: { card: Card; index: number; onDone(card: Card): void; dragging?: boolean; onDragStart?(id: string): void; onDragEnd?(): void }) {
+function CardRow({ card, index, onDone, onContextMenu, dragging, onDragStart, onDragEnd }: { card: Card; index: number; onDone(card: Card): void; onContextMenu(card: Card, x: number, y: number): void; dragging?: boolean; onDragStart?(id: string): void; onDragEnd?(): void }) {
   const due = formatDue(card.dueAt);
-  return <article className={`task task-${card.priority} ${dragging ? 'is-dragging' : ''}`} onPointerDown={(event) => { if (onDragStart && !(event.target as HTMLElement).closest('button')) { event.currentTarget.setPointerCapture(event.pointerId); onDragStart(card.id); } }} onLostPointerCapture={() => onDragEnd?.()}><button className={`check no-drag ${card.stack === 'finished' ? 'checked' : ''}`} aria-label={`Mark ${card.title} ${card.stack === 'finished' ? 'open' : 'done'}`} onClick={() => onDone(card)}>{card.stack === 'finished' && '✓'}</button><div className="task-copy"><div className="task-title"><span className="task-number">{String(index + 1).padStart(2, '0')}</span><h3>{card.title}</h3></div>{card.details && <p>{card.details}</p>}<div className="task-meta"><span className={`priority-dot ${card.priority}`} />{card.priority}<span>·</span>{due && <span className={due === 'Overdue' ? 'overdue' : ''}>{due}</span>}<span className="source">{card.source}</span></div></div>{onDragStart && <span className="drag-handle" aria-label="Drag card to another stack"><Drag /></span>}</article>;
+  return <article className={`task task-${card.priority} ${dragging ? 'is-dragging' : ''}`} onPointerDown={(event) => { if (onDragStart && !(event.target as HTMLElement).closest('button')) { event.currentTarget.setPointerCapture(event.pointerId); onDragStart(card.id); } }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); onContextMenu(card, event.clientX, event.clientY); }} onLostPointerCapture={() => onDragEnd?.()}><button className={`check no-drag ${card.stack === 'finished' ? 'checked' : ''}`} aria-label={`Mark ${card.title} ${card.stack === 'finished' ? 'open' : 'done'}`} onClick={() => onDone(card)}>{card.stack === 'finished' && '✓'}</button><div className="task-copy"><div className="task-title"><span className="task-number">{String(index + 1).padStart(2, '0')}</span><h3>{card.title}</h3></div>{card.details && <p>{card.details}</p>}<div className="task-meta"><span className={`priority-dot ${card.priority}`} />{card.priority}<span>·</span>{due && <span className={due === 'Overdue' ? 'overdue' : ''}>{due}</span>}<span className="source">{card.source}</span></div></div>{onDragStart && <span className="drag-handle" aria-label="Drag card to another stack"><Drag /></span>}</article>;
 }
 
-function Composer({ onClose, onCreate }: { onClose(): void; onCreate(input: Pick<Card, 'title' | 'priority' | 'details' | 'dueAt'>): void }) {
-  const [title, setTitle] = useState(''); const [details, setDetails] = useState(''); const [priority, setPriority] = useState<Priority>('high'); const [dueAt, setDueAt] = useState('');
-  return <aside className="panel composer"><div className="panel-heading"><div><p>New commitment</p><h2>Keep it specific</h2></div><button className="icon-button no-drag" onClick={onClose} aria-label="Close"><Close /></button></div><form onSubmit={(event) => { event.preventDefault(); if (title.trim()) onCreate({ title: title.trim(), details: details.trim() || undefined, priority, dueAt: dueAt ? new Date(dueAt).toISOString() : undefined }); }}><label>Title<input autoFocus value={title} maxLength={140} onChange={(event) => setTitle(event.target.value)} placeholder="What needs your attention?" /></label><label>Context<textarea value={details} maxLength={2000} onChange={(event) => setDetails(event.target.value)} placeholder="Optional details" /></label><div className="form-row"><label>Priority<select value={priority} onChange={(event) => setPriority(event.target.value as Priority)}><option value="critical">Critical</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select></label><label>Due<input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></label></div><button className="primary-button" type="submit">Add to priority</button></form></aside>;
+function Composer({ card, onClose, onSave }: { card?: Card; onClose(): void; onSave(input: Pick<Card, 'title' | 'priority' | 'details' | 'dueAt'>): void }) {
+  const [title, setTitle] = useState(card?.title ?? ''); const [details, setDetails] = useState(card?.details ?? ''); const [priority, setPriority] = useState<Priority>(card?.priority ?? 'high'); const [dueAt, setDueAt] = useState(card?.dueAt ? new Date(card.dueAt).toISOString().slice(0, 16) : '');
+  const isEditing = Boolean(card);
+  return <aside className="panel composer"><div className="panel-heading"><div><p>{isEditing ? 'Edit card' : 'New commitment'}</p><h2>{isEditing ? 'Refine the details' : 'Keep it specific'}</h2></div><button className="icon-button no-drag" onClick={onClose} aria-label="Close"><Close /></button></div><form onSubmit={(event) => { event.preventDefault(); if (title.trim()) onSave({ title: title.trim(), details: details.trim() || undefined, priority, dueAt: dueAt ? new Date(dueAt).toISOString() : undefined }); }}><label>Title<input autoFocus value={title} maxLength={140} onChange={(event) => setTitle(event.target.value)} placeholder="What needs your attention?" /></label><label>Context<textarea value={details} maxLength={2000} onChange={(event) => setDetails(event.target.value)} placeholder="Optional details" /></label><div className="form-row"><label>Priority<select value={priority} onChange={(event) => setPriority(event.target.value as Priority)}><option value="critical">Critical</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select></label><label>Due<input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></label></div><button className="primary-button" type="submit">{isEditing ? 'Save changes' : 'Add to priority'}</button></form></aside>;
+}
+
+function ContextMenu({ card, x, y, onEdit, onMove, onToggleDone, onDelete }: { card: Card; x: number; y: number; onEdit(card: Card): void; onMove(card: Card, stack: StackId): void; onToggleDone(card: Card): void; onDelete(card: Card): void }) {
+  const destinations = (Object.keys(stackMeta) as StackId[]).filter((stack) => stack !== card.stack && stack !== 'finished');
+  return <aside className="context-menu no-drag" role="menu" aria-label={`Actions for ${card.title}`} style={{ left: x, top: y }} onClick={(event) => event.stopPropagation()}><p className="context-title">{card.title}</p><button role="menuitem" onClick={() => onEdit(card)}><span>Edit details</span><span className="context-key">↵</span></button><div className="context-separator" />{destinations.map((stack) => <button role="menuitem" key={stack} onClick={() => onMove(card, stack)}><span>Move to {stackMeta[stack].title}</span><span className="context-symbol">→</span></button>)}<button role="menuitem" onClick={() => onToggleDone(card)}><span>{card.stack === 'finished' ? 'Reopen card' : 'Mark complete'}</span><span className="context-symbol">✓</span></button><div className="context-separator" /><button className="danger" role="menuitem" onClick={() => onDelete(card)}><span>Delete card</span><span className="context-key">⌫</span></button></aside>;
 }
 
 function Settings({ data, onChange, onClose }: { data: KunbanData; onChange(data: KunbanData): void; onClose(): void }) {
