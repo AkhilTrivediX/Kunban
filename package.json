@@ -7,8 +7,8 @@
   "license": "MIT",
   "scripts": {
     "dev": "concurrently -k \"npm:dev:ui\" \"npm:dev:electron\"",
-    "dev:ui": "vite",
-    "dev:electron": "wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 tsx src/electron/main.ts",
+    "dev:ui": "vite --host 127.0.0.1",
+    "dev:electron": "wait-on tcp:5188 && npm run build:electron && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5188 electron dist-electron/electron/main.js",
     "build": "npm run build:ui && npm run build:electron",
     "build:ui": "node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js build",
     "build:electron": "tsc -p tsconfig.electron.json",
