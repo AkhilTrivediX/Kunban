@@ -20,7 +20,6 @@ function createWindow() {
     show: false, backgroundColor: '#00000000',
     webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
   });
-  if (process.platform === 'win32') window.setBackgroundMaterial('acrylic');
   window.setAlwaysOnTop(true, 'floating');
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   window.loadURL(process.env.VITE_DEV_SERVER_URL ?? `file://${join(__dirname, '../dist/index.html')}`);

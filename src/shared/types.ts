@@ -18,6 +18,7 @@ export interface KunbanData {
     apiPort: number;
     theme: 'system' | 'light' | 'dark';
     expandedOnHover: boolean;
+    accent: 'moss' | 'iris' | 'coral' | 'sun';
   };
   localAccessKey: string;
 }

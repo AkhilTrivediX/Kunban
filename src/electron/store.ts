@@ -12,7 +12,7 @@ const seedCards: Card[] = [
 
 export const makeData = (): KunbanData => ({
   cards: seedCards,
-  settings: { apiPort: 7481, theme: 'system', expandedOnHover: true },
+  settings: { apiPort: 7481, theme: 'system', expandedOnHover: true, accent: 'moss' },
   localAccessKey: randomBytes(24).toString('hex')
 });
 
@@ -23,7 +23,8 @@ export class Store {
 
   async load() {
     try {
-      this.data = JSON.parse(await readFile(this.file, 'utf8')) as KunbanData;
+      const saved = JSON.parse(await readFile(this.file, 'utf8')) as Partial<KunbanData>;
+      this.data = { ...makeData(), ...saved, settings: { ...makeData().settings, ...saved.settings } };
     } catch {
       await this.save();
     }
