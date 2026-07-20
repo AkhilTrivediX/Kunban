@@ -41,13 +41,15 @@ function resizeFromRight(expanded: boolean) {
     y: start.y
   };
   const startedAt = Date.now();
-  const duration = 210;
-  const easeOutQuint = (progress: number) => 1 - Math.pow(1 - progress, 5);
+  const duration = 360;
+  const easeInOutCubic = (progress: number) => progress < 0.5
+    ? 4 * progress * progress * progress
+    : 1 - Math.pow(-2 * progress + 2, 3) / 2;
 
   resizeAnimation = setInterval(() => {
     if (!window || window.isDestroyed()) return;
     const progress = Math.min(1, (Date.now() - startedAt) / duration);
-    const amount = easeOutQuint(progress);
+    const amount = easeInOutCubic(progress);
     window.setBounds({
       x: Math.round(start.x + (target.x - start.x) * amount),
       y: start.y,
