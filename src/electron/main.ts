@@ -1,4 +1,6 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, screen, systemPreferences } from 'electron';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { Store } from './store';
 import { startApi } from './api';
@@ -9,8 +11,25 @@ let isQuitting = false;
 let resizeAnimation: NodeJS.Timeout | undefined;
 let finishResize: (() => void) | undefined;
 const store = new Store(join(app.getPath('userData'), 'kunban.json'));
+const execFileAsync = promisify(execFile);
 
 const dimensions = { compact: { width: 352, height: 352 }, expanded: { width: 910, height: 590 } };
+
+async function getSystemAccent() {
+  if (process.platform === 'win32') {
+    try {
+      const { stdout } = await execFileAsync('reg.exe', ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Accent', '/v', 'AccentColorMenu'], { windowsHide: true });
+      const match = stdout.match(/0x([\da-f]{8})/i);
+      if (match) {
+        const abgr = match[1];
+        return `#${abgr.slice(6, 8)}${abgr.slice(4, 6)}${abgr.slice(2, 4)}`;
+      }
+    } catch {
+      // Fall through to Electron's platform accent if the Registry value is unavailable.
+    }
+  }
+  return `#${systemPreferences.getAccentColor().slice(0, 6)}`;
+}
 
 function createWindow() {
   const bounds = screen.getPrimaryDisplay().workArea;
@@ -75,7 +94,7 @@ app.whenReady().then(async () => {
   startApi(store, Number(process.env.KUNBAN_PORT ?? data.settings.apiPort));
   createWindow();
   ipcMain.handle('kunban:load', () => store.snapshot());
-  ipcMain.handle('kunban:system-accent', () => `#${systemPreferences.getAccentColor().slice(0, 6)}`);
+  ipcMain.handle('kunban:system-accent', getSystemAccent);
   ipcMain.handle('kunban:save', async (_event, next: KunbanData) => {
     nativeTheme.themeSource = next.settings.theme;
     return store.mutate((current) => Object.assign(current, next));
