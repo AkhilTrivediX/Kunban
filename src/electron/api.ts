@@ -31,7 +31,7 @@ export const startApi = (store: Store, port: number) => {
   app.get('/api/info', (_req, res) => res.json({
     name: 'Kunban Local API', version: 'v1', port, protocol: 'kunban-local/v1',
     capabilities: { webCreate: true, localReadWrite: true, mcp: true },
-    docs: 'https://github.com/your-handle/kunban#local-api'
+    docs: 'https://github.com/AkhilTrivediX/Kunban#local-integrations'
   }));
 
   // This is the only browser-accessible route. It never returns cards and cannot set arbitrary fields.
