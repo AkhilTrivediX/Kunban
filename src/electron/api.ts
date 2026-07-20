@@ -13,6 +13,7 @@ const createCard = z.object({
   dueAt: z.string().datetime().optional(),
   stack: stack.default('priority')
 });
+const localCreateCard = createCard.extend({ agentName: z.string().trim().min(1).max(32).optional() });
 
 const isPrivateOrigin = (origin?: string) => !origin || /^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(origin);
 
@@ -59,9 +60,10 @@ export const startApi = (store: Store, port: number) => {
 
   app.get('/api/local/cards', (_req, res) => res.json({ cards: store.snapshot().cards }));
   app.post('/api/local/cards', async (req, res) => {
-    const parsed = createCard.safeParse(req.body);
+    const parsed = localCreateCard.safeParse(req.body);
     if (!parsed.success) return res.status(422).json({ error: 'Invalid card.', issues: parsed.error.flatten() });
-    res.status(201).json({ card: await store.createCard({ ...parsed.data, source: 'mcp' }) });
+    const { agentName, ...card } = parsed.data;
+    res.status(201).json({ card: await store.createCard({ ...card, source: agentName ?? 'Local AI' }) });
   });
   app.patch('/api/local/cards/:id', async (req, res) => {
     const parsed = z.object({ title: z.string().trim().min(1).max(140).optional(), details: z.string().trim().max(2_000).optional(), priority: priority.optional(), stack: stack.optional(), dueAt: z.string().datetime().nullable().optional() }).safeParse(req.body);

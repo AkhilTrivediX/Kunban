@@ -47,7 +47,15 @@ export default function App() {
     return () => window.clearInterval(refresh);
   }, []);
 
-  const cards = useMemo(() => [...data.cards].sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || Number(Boolean(a.dueAt)) * -1), [data.cards]);
+  const cards = useMemo(() => [...data.cards].sort((a, b) => {
+    const priorityDifference = priorityRank[a.priority] - priorityRank[b.priority];
+    if (priorityDifference) return priorityDifference;
+    const dueAt = (card: Card) => {
+      const timestamp = card.dueAt ? new Date(card.dueAt).getTime() : Number.POSITIVE_INFINITY;
+      return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
+    };
+    return dueAt(a) - dueAt(b) || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  }), [data.cards]);
   const update = (next: KunbanData) => { setData(next); void window.kunban.save(next); };
   const open = () => {
     if (expanded || resizing) return;

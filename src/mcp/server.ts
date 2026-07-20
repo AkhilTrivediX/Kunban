@@ -26,11 +26,12 @@ server.registerTool('list_cards', {
 });
 
 server.registerTool('create_card', {
-  description: 'Create a card in Kunban. Use priority for time-sensitive work and an ISO 8601 dueAt for deadlines.',
+  description: 'Create a card in Kunban. Use priority for time-sensitive work, an ISO 8601 dueAt for deadlines, and identify the AI creating it with a friendly agentName.',
   inputSchema: {
     title: z.string().min(1).max(140), details: z.string().max(2000).optional(),
     priority: z.enum(['critical', 'high', 'normal', 'low']).default('normal'),
-    stack: z.enum(['priority', 'planned', 'finished']).default('priority'), dueAt: z.string().datetime().optional()
+    stack: z.enum(['priority', 'planned', 'finished']).default('priority'), dueAt: z.string().datetime().optional(),
+    agentName: z.string().trim().min(1).max(32).describe('A short friendly name shown on the card, such as Codex or Gemini.')
   }
 }, async (input) => ({ content: [{ type: 'text', text: JSON.stringify(await local('/cards', { method: 'POST', body: JSON.stringify(input) })) }] }));
 

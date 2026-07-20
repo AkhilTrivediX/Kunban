@@ -8,7 +8,7 @@ export interface Card {
   priority: Priority;
   stack: StackId;
   dueAt?: string;
-  source: 'manual' | 'web' | 'mcp';
+  source: string;
   createdAt: string;
 }
 

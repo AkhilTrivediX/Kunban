@@ -103,7 +103,7 @@ Register this server with any MCP-compatible AI client:
 }
 ```
 
-Kunban’s MCP server provides `list_cards`, `create_card`, and `update_card`. It talks only to the local Kunban API and requires no user-managed secret.
+Kunban’s MCP server provides `list_cards`, `create_card`, and `update_card`. When creating a card, supply a short `agentName` such as `Codex` or `Gemini`; Kunban shows that name on the card instead of a generic MCP label. It talks only to the local Kunban API and requires no user-managed secret.
 
 ### One-line AI context
 
