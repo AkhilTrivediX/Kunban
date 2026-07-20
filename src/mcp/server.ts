@@ -3,15 +3,12 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 
 const port = Number(process.env.KUNBAN_PORT ?? 7481);
-const key = process.env.KUNBAN_LOCAL_KEY;
 const baseUrl = `http://127.0.0.1:${port}/api/local`;
-
-if (!key) throw new Error('KUNBAN_LOCAL_KEY is required. Copy it from Kunban Settings → Integrations.');
 
 async function local(path: string, options: RequestInit = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
     ...options,
-    headers: { 'X-Kunban-Local-Key': key, 'Content-Type': 'application/json', ...options.headers }
+    headers: { 'Content-Type': 'application/json', ...options.headers }
   });
   if (!response.ok) throw new Error(`Kunban returned ${response.status}: ${await response.text()}`);
   return response.json();

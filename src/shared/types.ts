@@ -18,9 +18,8 @@ export interface KunbanData {
     apiPort: number;
     theme: 'system' | 'light' | 'dark';
     expandedOnHover: boolean;
-    accent: 'moss' | 'iris' | 'coral' | 'sun';
+    accent: 'system' | 'moss' | 'iris' | 'coral' | 'sun';
   };
-  localAccessKey: string;
 }
 
 export const priorityRank: Record<Priority, number> = { critical: 0, high: 1, normal: 2, low: 3 };

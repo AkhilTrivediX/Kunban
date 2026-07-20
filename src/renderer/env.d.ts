@@ -6,7 +6,8 @@ declare global {
     kunban: {
       load(): Promise<KunbanData>;
       save(data: KunbanData): Promise<KunbanData>;
-      setExpanded(expanded: boolean): void;
+      getSystemAccent(): Promise<string>;
+      setExpanded(expanded: boolean): Promise<void>;
       hide(): void;
     };
   }

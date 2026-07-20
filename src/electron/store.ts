@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { Card, KunbanData } from '../shared/types';
@@ -12,8 +12,7 @@ const seedCards: Card[] = [
 
 export const makeData = (): KunbanData => ({
   cards: seedCards,
-  settings: { apiPort: 7481, theme: 'system', expandedOnHover: true, accent: 'moss' },
-  localAccessKey: randomBytes(24).toString('hex')
+  settings: { apiPort: 7481, theme: 'system', expandedOnHover: true, accent: 'system' }
 });
 
 export class Store {

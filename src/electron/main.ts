@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeTheme, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeTheme, screen, systemPreferences } from 'electron';
 import { join } from 'node:path';
 import { Store } from './store';
 import { startApi } from './api';
@@ -7,6 +7,7 @@ import type { KunbanData } from '../shared/types';
 let window: BrowserWindow | undefined;
 let isQuitting = false;
 let resizeAnimation: NodeJS.Timeout | undefined;
+let finishResize: (() => void) | undefined;
 const store = new Store(join(app.getPath('userData'), 'kunban.json'));
 
 const dimensions = { compact: { width: 352, height: 352 }, expanded: { width: 910, height: 590 } };
@@ -27,9 +28,9 @@ function createWindow() {
   window.on('close', (event) => { if (!isQuitting) { event.preventDefault(); window?.hide(); } });
 }
 
-function resizeFromRight(expanded: boolean) {
-  if (!window) return;
-  if (resizeAnimation) clearInterval(resizeAnimation);
+function resizeFromRight(expanded: boolean): Promise<void> {
+  if (!window) return Promise.resolve();
+  if (resizeAnimation) { clearInterval(resizeAnimation); finishResize?.(); }
   const start = window.getBounds();
   const targetSize = expanded ? dimensions.expanded : dimensions.compact;
   const display = screen.getDisplayMatching(start).workArea;
@@ -46,21 +47,26 @@ function resizeFromRight(expanded: boolean) {
     ? 4 * progress * progress * progress
     : 1 - Math.pow(-2 * progress + 2, 3) / 2;
 
-  resizeAnimation = setInterval(() => {
-    if (!window || window.isDestroyed()) return;
-    const progress = Math.min(1, (Date.now() - startedAt) / duration);
-    const amount = easeInOutCubic(progress);
-    window.setBounds({
-      x: Math.round(start.x + (target.x - start.x) * amount),
-      y: start.y,
-      width: Math.round(start.width + (target.width - start.width) * amount),
-      height: Math.round(start.height + (target.height - start.height) * amount)
-    });
-    if (progress === 1 && resizeAnimation) {
-      clearInterval(resizeAnimation);
-      resizeAnimation = undefined;
-    }
-  }, 16);
+  return new Promise((resolve) => {
+    finishResize = resolve;
+    resizeAnimation = setInterval(() => {
+      if (!window || window.isDestroyed()) { clearInterval(resizeAnimation); resizeAnimation = undefined; finishResize?.(); return; }
+      const progress = Math.min(1, (Date.now() - startedAt) / duration);
+      const amount = easeInOutCubic(progress);
+      window.setBounds({
+        x: Math.round(start.x + (target.x - start.x) * amount),
+        y: start.y,
+        width: Math.round(start.width + (target.width - start.width) * amount),
+        height: Math.round(start.height + (target.height - start.height) * amount)
+      });
+      if (progress === 1 && resizeAnimation) {
+        clearInterval(resizeAnimation);
+        resizeAnimation = undefined;
+        finishResize?.();
+        finishResize = undefined;
+      }
+    }, 16);
+  });
 }
 
 app.whenReady().then(async () => {
@@ -69,13 +75,12 @@ app.whenReady().then(async () => {
   startApi(store, Number(process.env.KUNBAN_PORT ?? data.settings.apiPort));
   createWindow();
   ipcMain.handle('kunban:load', () => store.snapshot());
+  ipcMain.handle('kunban:system-accent', () => `#${systemPreferences.getAccentColor().slice(0, 6)}`);
   ipcMain.handle('kunban:save', async (_event, next: KunbanData) => {
     nativeTheme.themeSource = next.settings.theme;
     return store.mutate((current) => Object.assign(current, next));
   });
-  ipcMain.on('widget:expanded', (_event, expanded: boolean) => {
-    resizeFromRight(expanded);
-  });
+  ipcMain.handle('widget:expanded', (_event, expanded: boolean) => resizeFromRight(expanded));
   ipcMain.on('widget:hide', () => window?.hide());
 });
 

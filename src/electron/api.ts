@@ -54,7 +54,6 @@ export const startApi = (store: Store, port: number) => {
 
   app.use('/api/local', (req, res, next) => {
     if (!isPrivateOrigin(req.get('origin'))) return res.status(403).json({ error: 'Browser origins cannot use the local API.' });
-    if (req.get('x-kunban-local-key') !== store.snapshot().localAccessKey) return res.status(401).json({ error: 'A local access key is required.' });
     next();
   });
 

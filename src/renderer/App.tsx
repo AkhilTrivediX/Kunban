@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { Card, KunbanData, Priority, StackId } from '../shared/types';
 import { priorityRank } from '../shared/types';
 
@@ -11,7 +11,7 @@ const accents = [
   { id: 'coral', name: 'Coral', color: 'oklch(.61 .18 28)' },
   { id: 'sun', name: 'Sun', color: 'oklch(.68 .15 78)' }
 ] as const;
-const emptyData: KunbanData = { cards: [], settings: { apiPort: 7481, theme: 'system', expandedOnHover: true, accent: 'moss' }, localAccessKey: '' };
+const emptyData: KunbanData = { cards: [], settings: { apiPort: 7481, theme: 'system', expandedOnHover: true, accent: 'system' } };
 
 const formatDue = (due?: string) => {
   if (!due) return null;
@@ -24,13 +24,15 @@ const formatDue = (due?: string) => {
 export default function App() {
   const [data, setData] = useState<KunbanData>(emptyData);
   const [expanded, setExpanded] = useState(false);
+  const [resizing, setResizing] = useState(false);
+  const [systemAccent, setSystemAccent] = useState('#0078d4');
   const [settings, setSettings] = useState(false);
   const [composer, setComposer] = useState(false);
   const [draggedCard, setDraggedCard] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<StackId | null>(null);
   const hoverTimer = useRef<number | undefined>(undefined);
 
-  useEffect(() => { void window.kunban.load().then(setData); }, []);
+  useEffect(() => { void window.kunban.load().then(setData); void window.kunban.getSystemAccent().then(setSystemAccent); }, []);
   useEffect(() => {
     const refresh = window.setInterval(() => { void window.kunban.load().then(setData); }, 10_000);
     return () => window.clearInterval(refresh);
@@ -38,8 +40,17 @@ export default function App() {
 
   const cards = useMemo(() => [...data.cards].sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || Number(Boolean(a.dueAt)) * -1), [data.cards]);
   const update = (next: KunbanData) => { setData(next); void window.kunban.save(next); };
-  const open = () => { if (!expanded) { setExpanded(true); window.kunban.setExpanded(true); } };
-  const close = () => { if (!settings && !composer) { setExpanded(false); window.kunban.setExpanded(false); } };
+  const open = () => {
+    if (expanded || resizing) return;
+    setResizing(true);
+    void window.kunban.setExpanded(true).then(() => { setExpanded(true); setResizing(false); });
+  };
+  const close = () => {
+    if (settings || composer || !expanded || resizing) return;
+    setExpanded(false);
+    setResizing(true);
+    void window.kunban.setExpanded(false).then(() => setResizing(false));
+  };
   const scheduleOpen = () => { if (data.settings.expandedOnHover) hoverTimer.current = window.setTimeout(open, 560); };
   const cancelOpen = () => window.clearTimeout(hoverTimer.current);
   const move = (id: string, stack: StackId) => update({ ...data, cards: data.cards.map((card) => card.id === id ? { ...card, stack } : card) });
@@ -49,7 +60,8 @@ export default function App() {
     setComposer(false);
   };
 
-  return <main className={`widget accent-${data.settings.accent} ${expanded ? 'is-expanded' : ''}`} onMouseEnter={scheduleOpen} onMouseLeave={() => { cancelOpen(); close(); }}>
+  const widgetStyle = { '--system-accent': systemAccent } as CSSProperties;
+  return <main className={`widget accent-${data.settings.accent} ${expanded ? 'is-expanded' : ''} ${resizing ? 'is-resizing' : ''}`} style={widgetStyle} onMouseEnter={scheduleOpen} onMouseLeave={() => { cancelOpen(); close(); }}>
     <header className="widget-header"><div className="brand drag"><Mark /><span>kunban</span><em>Today</em></div><div className="header-actions"><button className="icon-button no-drag" aria-label="Add a card" onClick={() => { open(); setComposer(true); }}><Plus /></button><button className="icon-button no-drag" aria-label="Settings" onClick={() => { open(); setSettings((value) => !value); }}><Gear /></button><button className="icon-button no-drag hide-button" aria-label="Hide Kunban" onClick={() => window.kunban.hide()}><Minus /></button></div></header>
     {!expanded ? <Compact cards={cards.filter((card) => card.stack === 'priority')} onOpen={open} onDone={toggleDone} /> : <Expanded cards={cards} onMove={move} onDone={toggleDone} draggedCard={draggedCard} dropTarget={dropTarget} onDragStart={setDraggedCard} onDragEnd={() => { setDraggedCard(null); setDropTarget(null); }} onDragTarget={setDropTarget} />}
     {composer && <Composer onClose={() => setComposer(false)} onCreate={create} />}
@@ -80,7 +92,7 @@ function Composer({ onClose, onCreate }: { onClose(): void; onCreate(input: Pick
 
 function Settings({ data, onChange, onClose }: { data: KunbanData; onChange(data: KunbanData): void; onClose(): void }) {
   const updateSettings = (changes: Partial<KunbanData['settings']>) => onChange({ ...data, settings: { ...data.settings, ...changes } });
-  return <aside className="panel settings" aria-label="Kunban settings"><div className="panel-heading"><div><p>Preferences</p><h2>Make it yours</h2></div><button className="icon-button no-drag" onClick={onClose} aria-label="Close"><Close /></button></div><section className="setting-group"><p className="group-label">Behaviour</p><div className="setting-row"><span><strong>Expand on hover</strong><small>Reveal stacks after a short pause.</small></span><button className={`switch no-drag ${data.settings.expandedOnHover ? 'is-on' : ''}`} role="switch" aria-checked={data.settings.expandedOnHover} onClick={() => updateSettings({ expandedOnHover: !data.settings.expandedOnHover })}><span /></button></div></section><section className="setting-group"><p className="group-label">Appearance</p><div className="setting-field"><span>Theme</span><div className="segmented">{(['system', 'light', 'dark'] as const).map((theme) => <button key={theme} className={data.settings.theme === theme ? 'is-selected' : ''} onClick={() => updateSettings({ theme })}>{theme}</button>)}</div></div><div className="setting-field"><span>Accent</span><div className="accent-picker">{accents.map((accent) => <button key={accent.id} className={`accent-swatch ${data.settings.accent === accent.id ? 'is-selected' : ''}`} style={{ background: accent.color }} aria-label={`Use ${accent.name} accent`} aria-pressed={data.settings.accent === accent.id} onClick={() => updateSettings({ accent: accent.id })}>{data.settings.accent === accent.id && '✓'}</button>)}</div></div></section><section className="setting-group integration"><p className="group-label">Local integration</p><code>127.0.0.1:{data.settings.apiPort}</code><small>Websites can request one card. Local AI tools use the private key below for board access.</small><code className="secret">{data.localAccessKey || 'Loading…'}</code></section></aside>;
+  return <aside className="panel settings" aria-label="Kunban settings"><div className="panel-heading"><div><p>Preferences</p><h2>Make it yours</h2></div><button className="icon-button no-drag" onClick={onClose} aria-label="Close"><Close /></button></div><section className="setting-group"><p className="group-label">Behaviour</p><div className="setting-row"><span><strong>Expand on hover</strong><small>Reveal stacks after a short pause.</small></span><button className={`switch no-drag ${data.settings.expandedOnHover ? 'is-on' : ''}`} role="switch" aria-checked={data.settings.expandedOnHover} onClick={() => updateSettings({ expandedOnHover: !data.settings.expandedOnHover })}><span /></button></div></section><section className="setting-group"><p className="group-label">Appearance</p><div className="setting-field"><span>Theme</span><div className="segmented">{(['system', 'light', 'dark'] as const).map((theme) => <button key={theme} className={data.settings.theme === theme ? 'is-selected' : ''} onClick={() => updateSettings({ theme })}>{theme}</button>)}</div></div><div className="setting-field"><span>Accent</span><div className="accent-picker"><button className={`accent-swatch system ${data.settings.accent === 'system' ? 'is-selected' : ''}`} aria-label="Use system accent" aria-pressed={data.settings.accent === 'system'} onClick={() => updateSettings({ accent: 'system' })}>⌘</button>{accents.map((accent) => <button key={accent.id} className={`accent-swatch ${data.settings.accent === accent.id ? 'is-selected' : ''}`} style={{ background: accent.color }} aria-label={`Use ${accent.name} accent`} aria-pressed={data.settings.accent === accent.id} onClick={() => updateSettings({ accent: accent.id })}>{data.settings.accent === accent.id && '✓'}</button>)}</div></div></section><section className="setting-group integration"><p className="group-label">Local integration</p><code>127.0.0.1:{data.settings.apiPort}</code><small>Local AI clients have full board access automatically. The service is bound to this device only.</small></section></aside>;
 }
 
 const Mark = () => <svg className="mark" viewBox="0 0 32 32" aria-label="Kunban"><rect x="2" y="2" width="28" height="28" rx="8" /><path d="M10 8v16M12.5 16l8-8M13 16l8 8" /><path d="M7.5 10h2M7.5 16h2M7.5 22h2" /></svg>;
